@@ -395,6 +395,155 @@ static void DrawClock(Adafruit_GFX* gfx, tm_t* tm, struct Lunar_Date* Lunar, gui
     }
 }
 
+static void DrawDashboardTokens(Adafruit_GFX* gfx, int16_t x, int16_t y, uint16_t value, bool large) {
+    uint16_t whole = value / 10;
+    uint8_t fraction = value % 10;
+
+    GFX_setTextColor(gfx, GFX_BLACK, GFX_WHITE);
+    GFX_setFont(gfx, large ? u8g2_font_helvB18_tn : u8g2_font_helvB14_tn);
+    GFX_setCursor(gfx, x, y);
+    GFX_printf(gfx, "%u.%u", whole, fraction);
+    GFX_setFont(gfx, u8g2_font_wqy9_t_lunar);
+    GFX_printf(gfx, "M");
+}
+
+static void DrawDashboardCost(Adafruit_GFX* gfx, int16_t x, int16_t y, uint16_t cents, uint16_t color) {
+    GFX_setTextColor(gfx, color, GFX_WHITE);
+    GFX_setFont(gfx, u8g2_font_wqy9_t_lunar);
+    GFX_setCursor(gfx, x, y);
+    GFX_printf(gfx, "$%u.%02u", cents / 100, cents % 100);
+}
+
+static void DrawDashboardCompact(Adafruit_GFX* gfx, tm_t* tm, gui_data_t* data) {
+    int16_t padding = 8;
+    int16_t divider = data->width / 2;
+
+    GFX_setFont(gfx, u8g2_font_wqy9_t_lunar);
+    GFX_setCursor(gfx, padding, 14);
+    GFX_printf(gfx, "CODEX QUOTA");
+    GFX_setCursor(gfx, data->width - 48, 14);
+    GFX_printf(gfx, "%02d.%02d", tm->tm_mon + 1, tm->tm_mday);
+    GFX_drawFastHLine(gfx, padding, 20, data->width - 2 * padding, GFX_BLACK);
+    GFX_drawFastVLine(gfx, divider, 28, data->height - 48, GFX_BLACK);
+
+    GFX_setCursor(gfx, padding, 39);
+    GFX_printf(gfx, "TODAY");
+    DrawDashboardTokens(gfx, padding, 62, data->dashboard.today_tokens_tenth_m, false);
+    GFX_setCursor(gfx, padding, 79);
+    GFX_printf(gfx, "%u REQS", data->dashboard.today_requests);
+    DrawDashboardCost(gfx, padding, 94, data->dashboard.today_cost_cents, GFX_RED);
+
+    GFX_setTextColor(gfx, GFX_BLACK, GFX_WHITE);
+    GFX_setCursor(gfx, divider + padding, 39);
+    GFX_printf(gfx, "MONTH");
+    DrawDashboardTokens(gfx, divider + padding, 62, data->dashboard.month_tokens_tenth_m, false);
+    GFX_setCursor(gfx, divider + padding, 79);
+    GFX_printf(gfx, "%u REQS", data->dashboard.month_requests);
+    DrawDashboardCost(gfx, divider + padding, 94, data->dashboard.month_cost_cents, GFX_BLACK);
+
+    GFX_drawFastHLine(gfx, padding, data->height - 31, data->width - 2 * padding, GFX_BLACK);
+    GFX_setCursor(gfx, padding, data->height - 13);
+    GFX_printf(gfx, "C:%u.%uM  CDX:%u.%uM", data->dashboard.claude_tokens_tenth_m / 10,
+               data->dashboard.claude_tokens_tenth_m % 10, data->dashboard.codex_tokens_tenth_m / 10,
+               data->dashboard.codex_tokens_tenth_m % 10);
+}
+
+static void DrawCodexDashboard(Adafruit_GFX* gfx, tm_t* tm, gui_data_t* data) {
+    const int16_t padding = 12;
+
+    if (data->width < 360 || data->height < 250) {
+        DrawDashboardCompact(gfx, tm, data);
+        return;
+    }
+
+    int16_t divider = data->width * 53 / 100;
+    int16_t right_x = divider + 12;
+    int16_t chart_left = padding + 3;
+    int16_t chart_right = data->width - padding - 3;
+    int16_t chart_top = data->height - 99;
+    int16_t chart_bottom = data->height - 45;
+    uint16_t highest = 1;
+
+    for (uint8_t i = 0; i < 7; i++) {
+        if (data->dashboard.history_tenth_m[i] > highest) highest = data->dashboard.history_tenth_m[i];
+    }
+
+    GFX_setFont(gfx, u8g2_font_wqy9_t_lunar);
+    GFX_setTextColor(gfx, GFX_BLACK, GFX_WHITE);
+    GFX_setCursor(gfx, padding, 15);
+    GFX_printf(gfx, "CODEX QUOTA");
+    GFX_setCursor(gfx, data->width - 54, 15);
+    GFX_printf(gfx, "%02d.%02d", tm->tm_mon + 1, tm->tm_mday);
+    GFX_drawFastHLine(gfx, padding, 22, data->width - 2 * padding, GFX_BLACK);
+    GFX_drawFastVLine(gfx, divider, 30, 127, GFX_BLACK);
+
+    GFX_setCursor(gfx, padding, 43);
+    GFX_printf(gfx, "TODAY TOKENS");
+    DrawDashboardTokens(gfx, padding, 70, data->dashboard.today_tokens_tenth_m, true);
+    GFX_setCursor(gfx, padding, 91);
+    GFX_printf(gfx, "%u REQUESTS", data->dashboard.today_requests);
+    DrawDashboardCost(gfx, divider - 66, 91, data->dashboard.today_cost_cents, GFX_RED);
+    GFX_drawFastHLine(gfx, padding, 99, divider - padding - 5, GFX_BLACK);
+    GFX_setCursor(gfx, padding, 114);
+    GFX_printf(gfx, "CLAUDE");
+    GFX_setCursor(gfx, divider - 48, 114);
+    GFX_printf(gfx, "%u.%uM", data->dashboard.claude_tokens_tenth_m / 10,
+               data->dashboard.claude_tokens_tenth_m % 10);
+    GFX_setCursor(gfx, padding, 128);
+    GFX_printf(gfx, "CODEX");
+    GFX_setCursor(gfx, divider - 48, 128);
+    GFX_printf(gfx, "%u.%uM", data->dashboard.codex_tokens_tenth_m / 10,
+               data->dashboard.codex_tokens_tenth_m % 10);
+
+    GFX_setCursor(gfx, right_x, 43);
+    GFX_printf(gfx, "MONTH TOKENS");
+    DrawDashboardTokens(gfx, right_x, 69, data->dashboard.month_tokens_tenth_m, false);
+    GFX_setCursor(gfx, right_x, 89);
+    GFX_printf(gfx, "COST");
+    DrawDashboardCost(gfx, data->width - 61, 89, data->dashboard.month_cost_cents, GFX_RED);
+    GFX_setCursor(gfx, right_x, 106);
+    GFX_printf(gfx, "REQUESTS");
+    GFX_setCursor(gfx, data->width - 38, 106);
+    GFX_printf(gfx, "%u", data->dashboard.month_requests);
+    GFX_setCursor(gfx, right_x, 123);
+    GFX_printf(gfx, "AVG / DAY");
+    GFX_setCursor(gfx, data->width - 39, 123);
+    GFX_printf(gfx, "%u.%uM", data->dashboard.month_tokens_tenth_m / 300,
+               (data->dashboard.month_tokens_tenth_m / 30) % 10);
+
+    GFX_drawFastHLine(gfx, padding, data->height - 116, data->width - 2 * padding, GFX_BLACK);
+    GFX_setCursor(gfx, padding, data->height - 102);
+    GFX_printf(gfx, "LAST 7 DAYS");
+    GFX_setCursor(gfx, data->width - 91, data->height - 102);
+    GFX_printf(gfx, "TOTAL %u.%uM", data->dashboard.month_tokens_tenth_m / 10,
+               data->dashboard.month_tokens_tenth_m % 10);
+
+    GFX_drawFastHLine(gfx, chart_left, chart_bottom, chart_right - chart_left, GFX_BLACK);
+    for (uint8_t i = 0; i < 7; i++) {
+        int16_t x = chart_left + (chart_right - chart_left) * i / 6;
+        int16_t y = chart_bottom - (chart_bottom - chart_top) * data->dashboard.history_tenth_m[i] / highest;
+
+        if (i > 0) {
+            int16_t previous_x = chart_left + (chart_right - chart_left) * (i - 1) / 6;
+            int16_t previous_y = chart_bottom - (chart_bottom - chart_top) * data->dashboard.history_tenth_m[i - 1] / highest;
+            GFX_drawLine(gfx, previous_x, previous_y, x, y, GFX_BLACK);
+        }
+        GFX_fillCircle(gfx, x, y, 2, i == 6 ? GFX_RED : GFX_WHITE);
+        GFX_drawCircle(gfx, x, y, 2, GFX_BLACK);
+
+        tm_t chart_tm = {0};
+        transformTime(data->timestamp - (6 - i) * 86400, &chart_tm);
+        GFX_setCursor(gfx, x - 6, chart_bottom + 14);
+        GFX_printf(gfx, "%02d", chart_tm.tm_mday);
+    }
+
+    GFX_drawFastHLine(gfx, padding, data->height - 27, data->width - 2 * padding, GFX_BLACK);
+    GFX_setCursor(gfx, padding, data->height - 10);
+    GFX_printf(gfx, "EPD - %.1fV", data->voltage);
+    GFX_setCursor(gfx, data->width - 82, data->height - 10);
+    GFX_printf(gfx, "%02d:%02d UPDATED", tm->tm_hour, tm->tm_min);
+}
+
 void DrawGUI(gui_data_t* data, buffer_callback callback, void* callback_data) {
     if (data->week_start > 6) data->week_start = 0;
 
@@ -425,6 +574,9 @@ void DrawGUI(gui_data_t* data, buffer_callback callback, void* callback_data) {
                 break;
             case MODE_CLOCK:
                 DrawClock(&gfx, &tm, &Lunar, data);
+                break;
+            case MODE_CODEX_DASHBOARD:
+                DrawCodexDashboard(&gfx, &tm, data);
                 break;
             default:
                 break;

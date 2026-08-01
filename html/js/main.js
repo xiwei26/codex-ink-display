@@ -31,6 +31,7 @@ const EpdCmd = {
 
   SET_TIME: 0x20,
   SET_WEEK_START: 0x21,
+  SET_DASHBOARD: 0x22,
 
   WRITE_IMG: 0x30, // v1.6
 
@@ -243,6 +244,60 @@ async function syncTime(mode) {
   if (!confirm(confirmMsg)) return;
 
   await sendTimeCommand(mode, modeName);
+}
+
+function dashboardInteger(id, multiplier, maximum) {
+  const value = Number(document.getElementById(id).value);
+  const scaled = Math.round(value * multiplier);
+  if (!Number.isFinite(value) || value < 0 || scaled > maximum) {
+    throw new Error(`${id} must be between 0 and ${maximum / multiplier}`);
+  }
+  return scaled;
+}
+
+function putUint16LE(bytes, offset, value) {
+  bytes[offset] = value & 0xFF;
+  bytes[offset + 1] = (value >>> 8) & 0xFF;
+}
+
+function getDashboardTrend() {
+  const values = document.getElementById('codexTrend').value
+    .split(/[,\s]+/)
+    .filter(Boolean)
+    .map(value => Math.round(Number(value) * 10));
+  if (values.length !== 7 || values.some(value => !Number.isFinite(value) || value < 0 || value > 65535)) {
+    throw new Error('Last 7 days must contain exactly seven values between 0 and 6553.5');
+  }
+  return values;
+}
+
+async function sendCodexDashboard() {
+  try {
+    // Two packets are intentional: each remains compatible with 20-byte BLE MTUs.
+    const summary = new Uint8Array(17);
+    summary[0] = 0;
+    putUint16LE(summary, 1, dashboardInteger('codexTodayTokens', 10, 65535));
+    putUint16LE(summary, 3, dashboardInteger('codexMonthTokens', 10, 65535));
+    putUint16LE(summary, 5, dashboardInteger('codexTodayRequests', 1, 65535));
+    putUint16LE(summary, 7, dashboardInteger('codexMonthRequests', 1, 65535));
+    putUint16LE(summary, 9, dashboardInteger('codexTodayCost', 100, 65535));
+    putUint16LE(summary, 11, dashboardInteger('codexMonthCost', 100, 65535));
+    putUint16LE(summary, 13, dashboardInteger('codexClaudeTokens', 10, 65535));
+    putUint16LE(summary, 15, dashboardInteger('codexCodexTokens', 10, 65535));
+
+    const trend = getDashboardTrend();
+    const history = new Uint8Array(15);
+    history[0] = 1;
+    trend.forEach((value, index) => putUint16LE(history, 1 + index * 2, value));
+
+    if (!await sendTimeCommand(3, 'Codex usage dashboard')) return;
+    if (!await write(EpdCmd.SET_DASHBOARD, summary)) return;
+    if (await write(EpdCmd.SET_DASHBOARD, history)) {
+      addLog('Codex usage dashboard updated.');
+    }
+  } catch (error) {
+    addLog(`Codex dashboard: ${error.message}`);
+  }
 }
 
 // 老款时钟模式 (仅适用于UC8179 7.5寸)
@@ -497,6 +552,7 @@ function updateButtonStatus(forceDisabled = false) {
   document.getElementById("sendcmdbutton").disabled = status;
   document.getElementById("calendarmodebutton").disabled = status;
   document.getElementById("clockmodebutton").disabled = status;
+  document.getElementById("codexdashboardbutton").disabled = status;
   document.getElementById("clearscreenbutton").disabled = status;
   document.getElementById("sendimgbutton").disabled = status;
   document.getElementById("setDriverbutton").disabled = status;

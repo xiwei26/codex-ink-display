@@ -46,6 +46,7 @@ static void epd_gui_update(void* p_event_data, uint16_t event_size) {
         .week_start = p_epd->config.week_start,
         .temperature = epd->drv->read_temp(epd),
         .voltage = EPD_ReadVoltage(),
+        .dashboard = p_epd->dashboard,
     };
 
     uint16_t dev_name_len = sizeof(data.ssid);
@@ -57,6 +58,24 @@ static void epd_gui_update(void* p_event_data, uint16_t event_size) {
     EPD_GPIO_Uninit();
 
     app_feed_wdt();
+}
+
+static uint16_t read_u16_le(const uint8_t* bytes) {
+    return (uint16_t)bytes[0] | ((uint16_t)bytes[1] << 8);
+}
+
+static void dashboard_defaults(codex_dashboard_t* dashboard) {
+    static const uint16_t history[7] = {76, 93, 58, 52, 68, 61, 88};
+
+    memset(dashboard, 0, sizeof(*dashboard));
+    dashboard->today_tokens_tenth_m = 1339;
+    dashboard->month_tokens_tenth_m = 4604;
+    dashboard->today_requests = 1053;
+    dashboard->month_requests = 4306;
+    dashboard->today_cost_cents = 8675;
+    dashboard->month_cost_cents = 33966;
+    dashboard->codex_tokens_tenth_m = 1339;
+    memcpy(dashboard->history_tenth_m, history, sizeof(history));
 }
 
 /**@brief Function for handling the @ref BLE_GAP_EVT_CONNECTED event from the S110 SoftDevice.
@@ -236,6 +255,33 @@ static void epd_service_on_write(ble_epd_t* p_epd, uint8_t* p_data, uint16_t len
                     extern uint32_t timestamp(void);
                     ble_epd_on_timer(p_epd, timestamp(), true);
                 }
+            }
+            break;
+
+        case EPD_CMD_SET_DASHBOARD:
+            /*
+             * BLE payload is split into two packets to support the 20-byte
+             * ATT payload of the older nRF51 firmware:
+             *   [0x22, 0x00, todayM, monthM, todayReq, monthReq, today$, month$,
+             *    claudeM, codexM] (all fields are uint16 little-endian)
+             *   [0x22, 0x01, day0M ... day6M] (seven uint16 little-endian values)
+             */
+            if (length < 2) return;
+            if (p_data[1] == 0 && length == 18) {
+                p_epd->dashboard.today_tokens_tenth_m = read_u16_le(&p_data[2]);
+                p_epd->dashboard.month_tokens_tenth_m = read_u16_le(&p_data[4]);
+                p_epd->dashboard.today_requests = read_u16_le(&p_data[6]);
+                p_epd->dashboard.month_requests = read_u16_le(&p_data[8]);
+                p_epd->dashboard.today_cost_cents = read_u16_le(&p_data[10]);
+                p_epd->dashboard.month_cost_cents = read_u16_le(&p_data[12]);
+                p_epd->dashboard.claude_tokens_tenth_m = read_u16_le(&p_data[14]);
+                p_epd->dashboard.codex_tokens_tenth_m = read_u16_le(&p_data[16]);
+            } else if (p_data[1] == 1 && length == 16) {
+                for (uint8_t i = 0; i < 7; i++) {
+                    p_epd->dashboard.history_tenth_m[i] = read_u16_le(&p_data[2 + i * 2]);
+                }
+                epd_update_display_mode(p_epd, MODE_CODEX_DASHBOARD);
+                ble_epd_on_timer(p_epd, timestamp(), true);
             }
             break;
 
@@ -466,6 +512,7 @@ uint32_t ble_epd_init(ble_epd_t* p_epd) {
 
     // Initialize transfer context
     memset(&p_epd->transfer_ctx, 0, sizeof(image_transfer_ctx_t));
+    dashboard_defaults(&p_epd->dashboard);
 
     epd_config_init(&p_epd->config);
     epd_config_read(&p_epd->config);
@@ -517,7 +564,8 @@ uint32_t ble_epd_string_send(ble_epd_t* p_epd, uint8_t* p_string, uint16_t lengt
 }
 
 void ble_epd_on_timer(ble_epd_t* p_epd, uint32_t timestamp, bool force_update) {
-    // Update calendar on 00:00:00, clock on every minute
+    // Update calendar on 00:00:00, clock on every minute. The usage board is
+    // refreshed explicitly when its two BLE data packets arrive.
     if (force_update || (p_epd->config.display_mode == MODE_CALENDAR && timestamp % 86400 == 0) ||
         (p_epd->config.display_mode == MODE_CLOCK && timestamp % 60 == 0)) {
         epd_gui_update_event_t event = {p_epd, timestamp};

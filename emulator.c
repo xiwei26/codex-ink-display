@@ -228,6 +228,18 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
                 .voltage = 3.2f,
                 .ssid = "NRF_EPD_84AC",
             };
+            static const codex_dashboard_t dashboard = {
+                .today_tokens_tenth_m = 1339,
+                .month_tokens_tenth_m = 4604,
+                .today_requests = 1053,
+                .month_requests = 4306,
+                .today_cost_cents = 8675,
+                .month_cost_cents = 33966,
+                .claude_tokens_tenth_m = 0,
+                .codex_tokens_tenth_m = 1339,
+                .history_tenth_m = {76, 93, 58, 52, 68, 61, 88},
+            };
+            data.dashboard = dashboard;
 
             // Call DrawGUI to render the interface
             DrawGUI(&data, DrawBitmap, NULL);
@@ -247,6 +259,11 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
                 else
                     g_display_mode = MODE_CLOCK;
 
+                InvalidateRect(hwnd, NULL, TRUE);
+            }
+            // Toggle the Codex usage dashboard with D.
+            else if (wParam == 'D') {
+                g_display_mode = (g_display_mode == MODE_CODEX_DASHBOARD) ? MODE_CALENDAR : MODE_CODEX_DASHBOARD;
                 InvalidateRect(hwnd, NULL, TRUE);
             }
             // Toggle BWR mode with R key

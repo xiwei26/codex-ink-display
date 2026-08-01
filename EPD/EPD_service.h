@@ -71,6 +71,7 @@ enum EPD_CMDS {
 
     EPD_CMD_SET_TIME = 0x20,       /** < set time with unix timestamp */
     EPD_CMD_SET_WEEK_START = 0x21, /** < set week start day (0: Sunday, 1: Monday, ...) */
+    EPD_CMD_SET_DASHBOARD = 0x22,  /** < set Codex dashboard values */
 
     EPD_CMD_WRITE_IMAGE = 0x30, /** < write image data to EPD ram */
 
@@ -119,6 +120,7 @@ typedef struct {
     epd_model_t* epd;             /**< current EPD model */
     epd_config_t config;          /**< EPD config */
     image_transfer_ctx_t transfer_ctx; /**< Image transfer context for CRC and resume */
+    codex_dashboard_t dashboard;  /**< runtime values for MODE_CODEX_DASHBOARD */
 } ble_epd_t;
 
 typedef struct {
