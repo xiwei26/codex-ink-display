@@ -5,8 +5,6 @@
 
 typedef enum {
     MODE_PICTURE = 0,
-    MODE_CALENDAR = 1,
-    MODE_CLOCK = 2,
     MODE_CODEX_DASHBOARD = 3,
 } display_mode_t;
 
@@ -33,10 +31,7 @@ typedef struct {
     uint16_t width;
     uint16_t height;
     uint32_t timestamp;
-    uint8_t week_start;  // 0: Sunday, 1: Monday
-    int8_t temperature;
     float voltage;
-    char ssid[20];
     codex_dashboard_t dashboard;
 } gui_data_t;
 

@@ -61,46 +61,12 @@ void ble_epd_evt_handler(ble_evt_t const* p_ble_evt, void* p_context);
 
 /**< EPD Service command IDs. */
 enum EPD_CMDS {
-    EPD_CMD_SET_PINS = 0x00,     /**< set EPD pin mapping. */
-    EPD_CMD_INIT = 0x01,         /**< init EPD display driver */
-    EPD_CMD_CLEAR = 0x02,        /**< clear EPD screen */
-    EPD_CMD_SEND_COMMAND = 0x03, /**< send command to EPD */
-    EPD_CMD_SEND_DATA = 0x04,    /**< send data to EPD */
-    EPD_CMD_REFRESH = 0x05,      /**< diaplay EPD ram on screen */
-    EPD_CMD_SLEEP = 0x06,        /**< EPD enter sleep mode */
+    EPD_CMD_SET_PINS = 0x00, /**< set EPD pin mapping. */
+    EPD_CMD_INIT = 0x01,     /**< init EPD display driver */
 
-    EPD_CMD_SET_TIME = 0x20,       /** < set time with unix timestamp */
-    EPD_CMD_SET_WEEK_START = 0x21, /** < set week start day (0: Sunday, 1: Monday, ...) */
-    EPD_CMD_SET_DASHBOARD = 0x22,  /** < set Codex dashboard values */
-
-    EPD_CMD_WRITE_IMAGE = 0x30, /** < write image data to EPD ram */
-
-    EPD_CMD_WRITE_BLOCK    = 0x31,   /**< write block with CRC verification */
-    EPD_CMD_QUERY_STATUS   = 0x32,   /**< query transfer status */
-    EPD_CMD_RESET_TRANSFER = 0x33,   /**< reset transfer state */
-
-    EPD_CMD_SET_CONFIG = 0x90, /**< set full EPD config */
-    EPD_CMD_SYS_RESET = 0x91,  /**< MCU reset */
-    EPD_CMD_SYS_SLEEP = 0x92,  /**< MCU enter sleep mode */
-    EPD_CMD_CFG_ERASE = 0x99,  /**< Erase config and reset */
+    EPD_CMD_SET_TIME = 0x20,      /** < set the display timestamp */
+    EPD_CMD_SET_DASHBOARD = 0x22, /** < set Codex dashboard values */
 };
-
-// Response types for CRC transfer
-#define EPD_RSP_BLOCK_ACK       0xA0  // Block ACK/NACK response
-#define EPD_RSP_STATUS          0xA1  // Status response
-
-// Transfer configuration
-#define EPD_MAX_BLOCKS          512   // Maximum blocks (96KB / 192B)
-#define EPD_BLOCK_BITMAP_SIZE   64    // Bitmap size (512 bits)
-
-/**@brief Image transfer context for resume capability */
-typedef struct {
-    uint8_t  session_id;                          /**< Session ID for transfer identification */
-    uint16_t total_blocks;                        /**< Total number of blocks */
-    uint16_t received_blocks;                     /**< Number of received blocks */
-    uint8_t  block_bitmap[EPD_BLOCK_BITMAP_SIZE]; /**< Bitmap of received blocks */
-    bool     transfer_active;                     /**< Whether transfer is active */
-} image_transfer_ctx_t;
 
 /**@brief EPD Service structure.
  *
@@ -119,7 +85,6 @@ typedef struct {
                                      characteristic.*/
     epd_model_t* epd;             /**< current EPD model */
     epd_config_t config;          /**< EPD config */
-    image_transfer_ctx_t transfer_ctx; /**< Image transfer context for CRC and resume */
     codex_dashboard_t dashboard;  /**< runtime values for MODE_CODEX_DASHBOARD */
 } ble_epd_t;
 

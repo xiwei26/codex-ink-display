@@ -1,46 +1,73 @@
-# EPD-nRF5
-## 说明：
-### 1. 主分支 工程文件 来自大佬https://tsl0922.github.io/EPD-nRF5
-### 2. 当前分支仅个人维护盒马4.2价签，会在原基础上做修改
+# Codex 墨水屏用量看板
 
-电子墨水屏固件，带有一个[网页版上位机](https://ycd12.github.io/EPD-nRF5_DYC/)，可以通过蓝牙传输图像到墨水屏，也可以把墨水屏设置为日历模式（支持农历、节气、节假日调休显示）。
+一个为 nRF52811 4.2 英寸墨水屏制作的 Codex 用量看板。固件通过 BLE 接收用量数据，在屏幕上显示今日/本月 Token、请求数、费用、Codex 与 Claude 的拆分，以及近 7 日趋势。
 
-支持的主控芯片有：  `nrf52811` / `nrf52810`，支持的墨水屏驱动有：`UC8176` / `UC8276` / `SSD1619` / `SSD1683` / `JD79668`（黑白/三色/四色墨水屏），同时还支持自定义墨水屏到 MCU 的引脚映射，支持睡眠唤醒（NFC / 无线充电器），支持蓝牙 OTA 固件升级。
+本项目从商家固件中仅保留看板所需的 nRF52、墨水屏驱动和 Web Bluetooth 控制页；图片传输、日历/时钟、nRF51、OTA、模拟器及历史文档均已移除。
 
-![](docs/images/1.jpg)
+## 效果与功能
 
-## 支持设备
+- 针对 400 × 300 的 4.2 英寸墨水屏布局。
+- 通过网页蓝牙填写并发送数据，无需重新生成位图。
+- 两个数据包均不超过旧设备的 20-byte ATT MTU；仅第二包到达时刷新一次，减少闪屏。
+- 使用当前浏览器时区写入刷新时间。
+- 固件内置示例数据，首次上电即可看到看板布局。
 
-- 盒马 4.2 寸价签，黑白红三色版本
+## 目录
 
-    ```
-    MCU：nrf52811
-    RAM：24K
-    ROM：192K
+```text
+EPD/       墨水屏驱动与 BLE 看板协议
+GUI/       看板绘制、字体与图形缓冲
+Keil/      nRF52811 的 Keil 工程
+SDK/       Nordic nRF5 SDK 17.1（构建依赖）
+html/      精简的 Web Bluetooth 控制台
+main.c     nRF52811 固件入口
+```
 
-    驱动：UC8176 (EPD_4in2b_V2)
-    屏幕引脚：0A0B0C0D0E0F10
-    线圈引脚：09
-    LED引脚：03/04/05 （有三个 LED，任选一个使用）
-    ```
+## 使用
 
-- 其它基于 `nrf51822` / `nrf51802` / `nrf52811` / `nrf52810` 的价签，理论上都支持
+### 1. 编译并烧录固件
 
-## 上位机
+安装 Keil µVision 与 Nordic `nRF_DeviceFamilyPack` 后，打开 [Keil/EPD-nRF52.uvprojx](Keil/EPD-nRF52.uvprojx)，选择 `nRF52811_xxAA`，按 `F7` 编译并通过 J-Link 或 CMSIS-DAP 烧录。
 
-本项目自带一个基于浏览器蓝牙接口实现的网页版上位机，可使用手机或电脑打开下面地址使用，或者在本地直接双击打开 `html/index.html` 来使用。
+工程也保留了 GCC 构建文件：安装 Arm GNU Toolchain 后，在 `SDK/17.1.0_ddde560/components/toolchain/gcc/Makefile.windows` 设置 `GNU_INSTALL_ROOT`，再执行：
 
-- 地址：https://ycd12.github.io/EPD-nRF5_DYC/
-- 演示：https://www.bilibili.com/video/BV1KWAVe1EKs
-- 交流群: [389017618](https://qm.qq.com/q/SckzhfDxuu) (点击链接加入群聊)
+```bash
+make -f Makefile.nRF52
+```
 
-![](docs/images/0.jpg)
+首次刷入裸芯片时，请另行按你的硬件/调试器流程刷写 S112 SoftDevice；项目中不再包含 OTA 或烧录工具。
 
-上位机支持多种图片抖动算法，且可以对图片进行涂鸦、添加文字。除了显示图片作为电子相框外，还可以切换到日历模式，显示月历、农历节气、节假日、放假调休等信息。
+### 2. 打开控制页
 
-## 致谢
+在项目根目录运行：
 
-- [tsl0922/EPD-nRF5](https://tsl0922.github.io/EPD-nRF5)
-- [ZinggJM/GxEPD2](https://github.com/ZinggJM/GxEPD2)
-- [waveshareteam/e-Paper](https://github.com/waveshareteam/e-Paper)
-- [atc1441/ATC_TLSR_Paper](https://github.com/atc1441/ATC_TLSR_Paper)
+```bash
+python -m http.server 8000
+```
+
+然后使用 Chrome 或 Edge 打开 <http://localhost:8000/html/>。Web Bluetooth 只能在 HTTPS 或 localhost 下工作，不能直接双击 HTML 文件。
+
+点击 **连接 NRF_EPD**，浏览器中选择设备后，填写用量数据，最后点击 **发送到墨水屏**。
+
+页面默认使用 4.2 英寸 SSD1619 配置（模型 `0x02`），与本项目的 nRF52811 默认引脚配置配套；若你的硬件不是这块同款屏幕，需要在固件中调整 `EPD_CFG_52811` 或显示模型。
+
+## 数据来源与限制
+
+看板只负责显示：它不会登录、读取或上传 Codex 账户信息。将 Codex 用量页、账单数据或你自己的统计脚本得到的数值填入网页即可。
+
+| 字段 | 存储单位 | 最大值 |
+| --- | --- | --- |
+| Token | 0.1M | 6553.5M |
+| 请求数 | 1 | 65535 |
+| 费用 | 美分 | $655.35 |
+
+协议使用 BLE 服务 `62750001-d828-918d-fb46-b6c11c675aec`、特征 `62750002-d828-918d-fb46-b6c11c675aec`：
+
+- `0x01`：初始化显示驱动。
+- `0x20`：同步时间并启用看板模式。
+- `0x22, 0x00`：发送摘要数据。
+- `0x22, 0x01`：发送 7 日趋势数据并触发刷新。
+
+## 许可与来源
+
+本仓库保留原项目的 [GPL-3.0 许可证](LICENSE)。硬件底层驱动与 Nordic SDK 依赖源自 [YCD12/EPD-nRF5_DYC](https://github.com/YCD12/EPD-nRF5_DYC)；本分支将其收敛为 Codex 用量看板用途。

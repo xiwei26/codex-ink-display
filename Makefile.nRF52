@@ -71,7 +71,6 @@ SRC_FILES += \
   $(PROJ_DIR)/EPD/UC81xx.c \
   $(PROJ_DIR)/EPD/SSD16xx.c \
   $(PROJ_DIR)/GUI/GUI.c \
-  $(PROJ_DIR)/GUI/Lunar.c \
   $(PROJ_DIR)/GUI/fonts.c \
   $(PROJ_DIR)/GUI/Adafruit_GFX.c \
   $(PROJ_DIR)/GUI/u8g2_font.c

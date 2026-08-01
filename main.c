@@ -730,7 +730,7 @@ int main(void) {
     NRF_LOG_DEBUG("done.\n");
 
     if (m_resetreas & NRF_POWER_RESETREAS_DOG_MASK) {
-        m_epd.config.display_mode = MODE_CALENDAR;
+        m_epd.config.display_mode = MODE_CODEX_DASHBOARD;
         ble_epd_on_timer(&m_epd, 0, true);
     } else {
         ble_epd_on_timer(&m_epd, m_timestamp, true);

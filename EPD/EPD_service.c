@@ -43,15 +43,9 @@ static void epd_gui_update(void* p_event_data, uint16_t event_size) {
         .width = epd->width,
         .height = epd->height,
         .timestamp = event->timestamp,
-        .week_start = p_epd->config.week_start,
-        .temperature = epd->drv->read_temp(epd),
         .voltage = EPD_ReadVoltage(),
         .dashboard = p_epd->dashboard,
     };
-
-    uint16_t dev_name_len = sizeof(data.ssid);
-    uint32_t err_code = sd_ble_gap_device_name_get((uint8_t*)data.ssid, &dev_name_len);
-    if (err_code == NRF_SUCCESS && dev_name_len > 0) data.ssid[dev_name_len] = '\0';
 
     DrawGUI(&data, (buffer_callback)epd->drv->write_image, epd);
     epd->drv->refresh(epd);
@@ -96,8 +90,10 @@ static void on_connect(ble_epd_t* p_epd, ble_evt_t* p_ble_evt) {
 static void on_disconnect(ble_epd_t* p_epd, ble_evt_t* p_ble_evt) {
     UNUSED_PARAMETER(p_ble_evt);
     p_epd->conn_handle = BLE_CONN_HANDLE_INVALID;
-    p_epd->epd->drv->sleep(p_epd->epd);
-    nrf_delay_ms(200);  // for sleep
+    if (p_epd->epd != NULL && p_epd->epd->drv != NULL) {
+        p_epd->epd->drv->sleep(p_epd->epd);
+        nrf_delay_ms(200);
+    }
     EPD_GPIO_Uninit();
 }
 
@@ -106,73 +102,6 @@ static void epd_update_display_mode(ble_epd_t* p_epd, display_mode_t mode) {
         p_epd->config.display_mode = mode;
         epd_config_write(&p_epd->config);
     }
-}
-
-static void epd_send_time(ble_epd_t* p_epd) {
-    char buf[20] = {0};
-    snprintf(buf, 20, "t=%" PRIu32, timestamp());
-    ble_epd_string_send(p_epd, (uint8_t*)buf, strlen(buf));
-}
-
-static void epd_send_mtu(ble_epd_t* p_epd) {
-    char buf[10] = {0};
-    snprintf(buf, sizeof(buf), "mtu=%d", p_epd->max_data_len);
-    ble_epd_string_send(p_epd, (uint8_t*)buf, strlen(buf));
-}
-
-// CRC16-CCITT calculation (polynomial 0x8408, init 0xFFFF)
-static uint16_t crc16_compute(const uint8_t* data, uint16_t len) {
-    uint16_t crc = 0xFFFF;
-    for (uint16_t i = 0; i < len; i++) {
-        crc ^= data[i];
-        for (uint8_t j = 0; j < 8; j++) {
-            crc = (crc & 1) ? (crc >> 1) ^ 0x8408 : crc >> 1;
-        }
-    }
-    return crc;
-}
-
-// Send block ACK/NACK response
-static void send_block_response(ble_epd_t* p_epd, uint16_t block_id, uint8_t status) {
-    uint8_t response[4] = {
-        EPD_RSP_BLOCK_ACK,
-        block_id & 0xFF,
-        block_id >> 8,
-        status
-    };
-    ble_epd_string_send(p_epd, response, 4);
-}
-
-// Send transfer status response
-// Only sends used bitmap bytes to stay within MTU limits
-static void send_status_response(ble_epd_t* p_epd) {
-    // Calculate required bitmap bytes based on total blocks
-    uint16_t bitmap_bytes = (p_epd->transfer_ctx.total_blocks + 7) / 8;
-    if (bitmap_bytes > EPD_BLOCK_BITMAP_SIZE) {
-        bitmap_bytes = EPD_BLOCK_BITMAP_SIZE;
-    }
-
-    uint16_t response_len = 7 + bitmap_bytes;
-
-    // Ensure response fits in MTU (with safety check for min MTU)
-    if (p_epd->max_data_len < 7) {
-        return;  // MTU too small, cannot send status
-    }
-    if (response_len > p_epd->max_data_len) {
-        bitmap_bytes = p_epd->max_data_len - 7;
-        response_len = p_epd->max_data_len;
-    }
-
-    uint8_t response[7 + EPD_BLOCK_BITMAP_SIZE];
-    response[0] = EPD_RSP_STATUS;
-    response[1] = p_epd->transfer_ctx.total_blocks & 0xFF;
-    response[2] = p_epd->transfer_ctx.total_blocks >> 8;
-    response[3] = p_epd->transfer_ctx.received_blocks & 0xFF;
-    response[4] = p_epd->transfer_ctx.received_blocks >> 8;
-    response[5] = p_epd->transfer_ctx.session_id;
-    response[6] = p_epd->transfer_ctx.transfer_active ? 1 : 0;
-    memcpy(&response[7], p_epd->transfer_ctx.block_bitmap, bitmap_bytes);
-    ble_epd_string_send(p_epd, response, response_len);
 }
 
 static void epd_service_on_write(ble_epd_t* p_epd, uint8_t* p_data, uint16_t length) {
@@ -205,31 +134,6 @@ static void epd_service_on_write(ble_epd_t* p_epd, uint8_t* p_data, uint16_t len
                 p_epd->config.model_id = p_epd->epd->id;
                 epd_config_write(&p_epd->config);
             }
-            epd_send_mtu(p_epd);
-            epd_send_time(p_epd);
-            break;
-
-        case EPD_CMD_CLEAR:
-            epd_update_display_mode(p_epd, MODE_PICTURE);
-            p_epd->epd->drv->clear(p_epd->epd, length > 1 ? p_data[1] : true);
-            break;
-
-        case EPD_CMD_SEND_COMMAND:
-            if (length < 2) return;
-            EPD_WriteCmd(p_data[1]);
-            break;
-
-        case EPD_CMD_SEND_DATA:
-            EPD_WriteData(&p_data[1], length - 1);
-            break;
-
-        case EPD_CMD_REFRESH:
-            epd_update_display_mode(p_epd, MODE_PICTURE);
-            p_epd->epd->drv->refresh(p_epd->epd);
-            break;
-
-        case EPD_CMD_SLEEP:
-            p_epd->epd->drv->sleep(p_epd->epd);
             break;
 
         case EPD_CMD_SET_TIME: {
@@ -241,10 +145,11 @@ static void epd_service_on_write(ble_epd_t* p_epd, uint8_t* p_data, uint16_t len
             uint32_t timestamp = (p_data[1] << 24) | (p_data[2] << 16) | (p_data[3] << 8) | p_data[4];
             timestamp += (length > 5 ? (int8_t)p_data[5] : 8) * 60 * 60;  // timezone
             set_timestamp(timestamp);
-            epd_update_display_mode(p_epd, length > 6 ? (display_mode_t)p_data[6] : MODE_CALENDAR);
+            epd_update_display_mode(p_epd, MODE_CODEX_DASHBOARD);
             ble_epd_on_timer(p_epd, timestamp, true);
         } break;
 
+        #if 0
         case EPD_CMD_SET_WEEK_START:
             if (length < 2) return;
             if (p_data[1] < 7) {
@@ -257,6 +162,8 @@ static void epd_service_on_write(ble_epd_t* p_epd, uint8_t* p_data, uint16_t len
                 }
             }
             break;
+
+        #endif
 
         case EPD_CMD_SET_DASHBOARD:
             /*
@@ -285,7 +192,8 @@ static void epd_service_on_write(ble_epd_t* p_epd, uint8_t* p_data, uint16_t len
             }
             break;
 
-        case EPD_CMD_WRITE_IMAGE:  // MSB=0000: ram begin, LSB=1111: black
+        #if 0
+        case EPD_CMD_WRITE_IMAGE:  // Legacy image-transfer mode removed from the dashboard build.
             if (length < 3) return;
             p_epd->epd->drv->write_ram(p_epd->epd, p_data[1], &p_data[2], length - 2);
             break;
@@ -389,6 +297,8 @@ static void epd_service_on_write(ble_epd_t* p_epd, uint8_t* p_data, uint16_t len
             nrf_delay_ms(100);  // required
             NVIC_SystemReset();
             break;
+
+        #endif
 
         default:
             break;
@@ -510,8 +420,6 @@ uint32_t ble_epd_init(ble_epd_t* p_epd) {
     p_epd->conn_handle = BLE_CONN_HANDLE_INVALID;
     p_epd->is_notification_enabled = false;
 
-    // Initialize transfer context
-    memset(&p_epd->transfer_ctx, 0, sizeof(image_transfer_ctx_t));
     dashboard_defaults(&p_epd->dashboard);
 
     epd_config_init(&p_epd->config);
@@ -531,8 +439,12 @@ uint32_t ble_epd_init(ble_epd_t* p_epd) {
         uint8_t cfg[] = EPD_CFG_DEFAULT;
         memcpy(&p_epd->config, cfg, sizeof(cfg));
 #endif
-        if (p_epd->config.display_mode == 0xFF) p_epd->config.display_mode = MODE_CALENDAR;
-        if (p_epd->config.week_start == 0xFF) p_epd->config.week_start = 1;  // Default to Monday
+        p_epd->config.display_mode = MODE_CODEX_DASHBOARD;
+        epd_config_write(&p_epd->config);
+    }
+
+    if (p_epd->config.display_mode != MODE_CODEX_DASHBOARD) {
+        p_epd->config.display_mode = MODE_CODEX_DASHBOARD;
         epd_config_write(&p_epd->config);
     }
 
@@ -564,10 +476,7 @@ uint32_t ble_epd_string_send(ble_epd_t* p_epd, uint8_t* p_string, uint16_t lengt
 }
 
 void ble_epd_on_timer(ble_epd_t* p_epd, uint32_t timestamp, bool force_update) {
-    // Update calendar on 00:00:00, clock on every minute. The usage board is
-    // refreshed explicitly when its two BLE data packets arrive.
-    if (force_update || (p_epd->config.display_mode == MODE_CALENDAR && timestamp % 86400 == 0) ||
-        (p_epd->config.display_mode == MODE_CLOCK && timestamp % 60 == 0)) {
+    if (force_update) {
         epd_gui_update_event_t event = {p_epd, timestamp};
         app_sched_event_put(&event, sizeof(epd_gui_update_event_t), epd_gui_update);
     }

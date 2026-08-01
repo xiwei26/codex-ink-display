@@ -435,11 +435,6 @@
               <FilePath>..\GUI\GUI.c</FilePath>
             </File>
             <File>
-              <FileName>Lunar.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\GUI\Lunar.c</FilePath>
-            </File>
-            <File>
               <FileName>fonts.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\GUI\fonts.c</FilePath>
@@ -1190,11 +1185,6 @@
               <FileName>GUI.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\GUI\GUI.c</FilePath>
-            </File>
-            <File>
-              <FileName>Lunar.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\GUI\Lunar.c</FilePath>
             </File>
             <File>
               <FileName>fonts.c</FileName>
