@@ -88,3 +88,7 @@ _build/
 RTE_Components.h
 EventRecorderStub.scvd
 JLinkLog.txt
+
+# Local Python dashboard service cache
+__pycache__/
+*.py[cod]

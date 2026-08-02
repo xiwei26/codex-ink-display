@@ -64,11 +64,12 @@ static void dashboard_defaults(codex_dashboard_t* dashboard) {
     memset(dashboard, 0, sizeof(*dashboard));
     dashboard->today_tokens_tenth_m = 1339;
     dashboard->month_tokens_tenth_m = 4604;
-    dashboard->today_requests = 1053;
-    dashboard->month_requests = 4306;
-    dashboard->today_cost_cents = 8675;
-    dashboard->month_cost_cents = 33966;
-    dashboard->codex_tokens_tenth_m = 1339;
+    dashboard->current_streak_days = 8;
+    dashboard->longest_streak_days = 14;
+    dashboard->primary_used_hundredths_percent = 2500;
+    dashboard->secondary_used_hundredths_percent = 4000;
+    dashboard->lifetime_tokens_tenth_m = 10234;
+    dashboard->peak_daily_tokens_tenth_m = 456;
     memcpy(dashboard->history_tenth_m, history, sizeof(history));
 }
 
@@ -169,20 +170,20 @@ static void epd_service_on_write(ble_epd_t* p_epd, uint8_t* p_data, uint16_t len
             /*
              * BLE payload is split into two packets to support the 20-byte
              * ATT payload of the older nRF51 firmware:
-             *   [0x22, 0x00, todayM, monthM, todayReq, monthReq, today$, month$,
-             *    claudeM, codexM] (all fields are uint16 little-endian)
+             *   [0x22, 0x00, todayM, monthM, currentStreak, longestStreak, fiveHourUsed,
+             *    weekUsed, lifetimeM, peakDayM] (all fields are uint16 little-endian)
              *   [0x22, 0x01, day0M ... day6M] (seven uint16 little-endian values)
              */
             if (length < 2) return;
             if (p_data[1] == 0 && length == 18) {
                 p_epd->dashboard.today_tokens_tenth_m = read_u16_le(&p_data[2]);
                 p_epd->dashboard.month_tokens_tenth_m = read_u16_le(&p_data[4]);
-                p_epd->dashboard.today_requests = read_u16_le(&p_data[6]);
-                p_epd->dashboard.month_requests = read_u16_le(&p_data[8]);
-                p_epd->dashboard.today_cost_cents = read_u16_le(&p_data[10]);
-                p_epd->dashboard.month_cost_cents = read_u16_le(&p_data[12]);
-                p_epd->dashboard.claude_tokens_tenth_m = read_u16_le(&p_data[14]);
-                p_epd->dashboard.codex_tokens_tenth_m = read_u16_le(&p_data[16]);
+                p_epd->dashboard.current_streak_days = read_u16_le(&p_data[6]);
+                p_epd->dashboard.longest_streak_days = read_u16_le(&p_data[8]);
+                p_epd->dashboard.primary_used_hundredths_percent = read_u16_le(&p_data[10]);
+                p_epd->dashboard.secondary_used_hundredths_percent = read_u16_le(&p_data[12]);
+                p_epd->dashboard.lifetime_tokens_tenth_m = read_u16_le(&p_data[14]);
+                p_epd->dashboard.peak_daily_tokens_tenth_m = read_u16_le(&p_data[16]);
             } else if (p_data[1] == 1 && length == 16) {
                 for (uint8_t i = 0; i < 7; i++) {
                     p_epd->dashboard.history_tenth_m[i] = read_u16_le(&p_data[2 + i * 2]);

@@ -1,73 +1,94 @@
 # Codex 墨水屏用量看板
 
-一个为 nRF52811 4.2 英寸墨水屏制作的 Codex 用量看板。固件通过 BLE 接收用量数据，在屏幕上显示今日/本月 Token、请求数、费用、Codex 与 Claude 的拆分，以及近 7 日趋势。
+为 nRF52811 4.2 英寸墨水屏制作的 Codex 用量看板。它从当前电脑已登录的 Codex 账号自动读取用量，经过 Web Bluetooth 推送到设备显示。
 
-本项目从商家固件中仅保留看板所需的 nRF52、墨水屏驱动和 Web Bluetooth 控制页；图片传输、日历/时钟、nRF51、OTA、模拟器及历史文档均已移除。
+## 显示的数据
 
-## 效果与功能
+- 今日、本月、累计与峰值日 Token
+- 最近 7 天 Token 趋势
+- 当前和最长连续使用天数
+- 5 小时与周额度已用比例
 
-- 针对 400 × 300 的 4.2 英寸墨水屏布局。
-- 通过网页蓝牙填写并发送数据，无需重新生成位图。
-- 两个数据包均不超过旧设备的 20-byte ATT MTU；仅第二包到达时刷新一次，减少闪屏。
-- 使用当前浏览器时区写入刷新时间。
-- 固件内置示例数据，首次上电即可看到看板布局。
+数据来自本机 `codex app-server` 的 `account/usage/read` 与 `account/rateLimits/read`。服务只返回用于显示的数值，不读取或传输 `auth.json`、访问令牌、邮箱或密码。
 
-## 目录
+## 快速使用
 
-```text
-EPD/       墨水屏驱动与 BLE 看板协议
-GUI/       看板绘制、字体与图形缓冲
-Keil/      nRF52811 的 Keil 工程
-SDK/       Nordic nRF5 SDK 17.1（构建依赖）
-html/      精简的 Web Bluetooth 控制台
-main.c     nRF52811 固件入口
-```
+### 1. 准备固件
 
-## 使用
+安装 Keil µVision 和 Nordic `nRF_DeviceFamilyPack` 后，打开 [Keil/EPD-nRF52.uvprojx](Keil/EPD-nRF52.uvprojx)，选择 `nRF52811_xxAA`，按 `F7` 编译并通过 J-Link 或 CMSIS-DAP 烧录。
 
-### 1. 编译并烧录固件
-
-安装 Keil µVision 与 Nordic `nRF_DeviceFamilyPack` 后，打开 [Keil/EPD-nRF52.uvprojx](Keil/EPD-nRF52.uvprojx)，选择 `nRF52811_xxAA`，按 `F7` 编译并通过 J-Link 或 CMSIS-DAP 烧录。
-
-工程也保留了 GCC 构建文件：安装 Arm GNU Toolchain 后，在 `SDK/17.1.0_ddde560/components/toolchain/gcc/Makefile.windows` 设置 `GNU_INSTALL_ROOT`，再执行：
+也可使用 Arm GNU Toolchain：在 `SDK/17.1.0_ddde560/components/toolchain/gcc/Makefile.windows` 配置 `GNU_INSTALL_ROOT`，然后运行：
 
 ```bash
 make -f Makefile.nRF52
 ```
 
-首次刷入裸芯片时，请另行按你的硬件/调试器流程刷写 S112 SoftDevice；项目中不再包含 OTA 或烧录工具。
+首次烧录仍需要按硬件调试器流程写入对应的 S112 SoftDevice；仓库不再包含 OTA 或烧录工具。
 
-### 2. 打开控制页
+### 2. 启动本机看板服务
 
-在项目根目录运行：
+前提：已安装并登录 Codex，且 `codex --version` 可运行；Windows 上还需要 Python 3。
 
 ```bash
-python -m http.server 8000
+python local_server.py
 ```
 
-然后使用 Chrome 或 Edge 打开 <http://localhost:8000/html/>。Web Bluetooth 只能在 HTTPS 或 localhost 下工作，不能直接双击 HTML 文件。
+服务默认只监听 `127.0.0.1:8765`。用 Chrome 或 Edge 打开 <http://127.0.0.1:8765/html/>：
 
-点击 **连接 NRF_EPD**，浏览器中选择设备后，填写用量数据，最后点击 **发送到墨水屏**。
+1. 点击“刷新 Codex 数据”。
+2. 点击“连接 NRF_EPD”，在浏览器选择设备。
+3. 点击“推送看板”。
 
-页面默认使用 4.2 英寸 SSD1619 配置（模型 `0x02`），与本项目的 nRF52811 默认引脚配置配套；若你的硬件不是这块同款屏幕，需要在固件中调整 `EPD_CFG_52811` 或显示模型。
+Web Bluetooth 仅在 HTTPS 或 localhost 下可用，因此不要直接双击打开 HTML 文件，也不要使用 `python -m http.server` 替代本项目的本机服务。
 
-## 数据来源与限制
+### 常见问题
 
-看板只负责显示：它不会登录、读取或上传 Codex 账户信息。将 Codex 用量页、账单数据或你自己的统计脚本得到的数值填入网页即可。
+- **“未找到 codex 命令”**：确认 `codex --version` 可运行；若没有，请先安装 Codex 并重新打开终端。
+- **“Codex 请求失败”或显示“不可用”**：在 Codex 中重新登录 ChatGPT 账号后刷新页面。API Key 模式不会返回 ChatGPT 用量与额度。
+- **无法连接设备**：使用 Chrome 或 Edge，确认页面地址是 `127.0.0.1`/`localhost`，并打开电脑蓝牙。
 
-| 字段 | 存储单位 | 最大值 |
-| --- | --- | --- |
-| Token | 0.1M | 6553.5M |
-| 请求数 | 1 | 65535 |
-| 费用 | 美分 | $655.35 |
+## 工作原理
 
-协议使用 BLE 服务 `62750001-d828-918d-fb46-b6c11c675aec`、特征 `62750002-d828-918d-fb46-b6c11c675aec`：
+```text
+浏览器页面 ──HTTP(仅 127.0.0.1)──> local_server.py
+                                         │
+                                         └──> codex app-server ──> 当前登录的 Codex 账号
+浏览器页面 ──Web Bluetooth──> NRF_EPD 墨水屏
+```
 
-- `0x01`：初始化显示驱动。
-- `0x20`：同步时间并启用看板模式。
-- `0x22, 0x00`：发送摘要数据。
-- `0x22, 0x01`：发送 7 日趋势数据并触发刷新。
+`local_server.py` 会为每次刷新临时启动 `codex app-server`，先完成 JSON-RPC 初始化，再依次读取账户状态、Token 活动和额度窗口。它不解析 `~/.codex/auth.json`，也不会将认证信息暴露给网页或 BLE 设备。
 
-## 许可与来源
+## BLE 看板协议
 
-本仓库保留原项目的 [GPL-3.0 许可证](LICENSE)。硬件底层驱动与 Nordic SDK 依赖源自 [YCD12/EPD-nRF5_DYC](https://github.com/YCD12/EPD-nRF5_DYC)；本分支将其收敛为 Codex 用量看板用途。
+服务端页面使用固定的 EPD 自定义服务：
+
+- 服务：`62750001-d828-918d-fb46-b6c11c675aec`
+- 特征：`62750002-d828-918d-fb46-b6c11c675aec`
+- `0x01`：初始化屏幕驱动
+- `0x20`：同步显示时间
+- `0x22, 0x00`：摘要包，依次为今日/月度 Token、当前/最长连续天数、5h/周额度已用比例、累计/峰值日 Token
+- `0x22, 0x01`：7 天趋势包，到达后触发一次屏幕刷新
+
+为兼容 20-byte ATT MTU，Token 以 `0.1M` 传输，额度比例以 `0.01%` 传输。过大的数值在设备传输前会安全截断为协议上限。
+
+## 项目目录
+
+```text
+EPD/             BLE 服务、墨水屏驱动与看板协议
+GUI/             看板绘制和字库
+Keil/            nRF52811 Keil 工程
+SDK/             Nordic nRF5 SDK 17.1（构建依赖）
+html/            本机网页与 Web Bluetooth 控制台
+local_server.py  localhost 服务和 Codex app-server 适配器
+main.c           nRF52811 固件入口
+```
+
+## 限制
+
+- 仅支持当前已用 ChatGPT 登录的 Codex 账号；API Key 模式通常没有 ChatGPT 额度数据。
+- Codex 接口不提供每个请求的美元费用或 Claude 用量，因此看板不显示这些字段。
+- `account/usage/read` 和 `account/rateLimits/read` 的可用字段取决于当前 Codex 版本及账号计划；缺失字段会显示为 0 或“不可用”。
+
+## 来源与许可
+
+项目保留原始项目的 [GPL-3.0 许可证](LICENSE)。底层墨水屏驱动与 Nordic SDK 来自 [YCD12/EPD-nRF5_DYC](https://github.com/YCD12/EPD-nRF5_DYC)，本仓库将其精简为 Codex 用量看板用途。

@@ -49,11 +49,12 @@ static void draw_tokens(Adafruit_GFX* gfx, int16_t x, int16_t y, uint16_t value,
     GFX_printf(gfx, "M");
 }
 
-static void draw_cost(Adafruit_GFX* gfx, int16_t x, int16_t y, uint16_t cents, uint16_t color) {
+static void draw_percent(Adafruit_GFX* gfx, int16_t x, int16_t y, uint16_t hundredths_percent,
+                         uint16_t color) {
     GFX_setTextColor(gfx, color, GFX_WHITE);
     GFX_setFont(gfx, u8g2_font_wqy9_t_lunar);
     GFX_setCursor(gfx, x, y);
-    GFX_printf(gfx, "$%u.%02u", cents / 100, cents % 100);
+    GFX_printf(gfx, "%u.%02u%%", hundredths_percent / 100, hundredths_percent % 100);
 }
 
 static void draw_dashboard(Adafruit_GFX* gfx, gui_data_t* data) {
@@ -86,35 +87,34 @@ static void draw_dashboard(Adafruit_GFX* gfx, gui_data_t* data) {
     GFX_printf(gfx, "TODAY TOKENS");
     draw_tokens(gfx, padding, 70, data->dashboard.today_tokens_tenth_m, true);
     GFX_setCursor(gfx, padding, 91);
-    GFX_printf(gfx, "%u REQUESTS", data->dashboard.today_requests);
-    draw_cost(gfx, divider - 66, 91, data->dashboard.today_cost_cents, GFX_RED);
+    GFX_printf(gfx, "STREAK %u DAYS", data->dashboard.current_streak_days);
     GFX_drawFastHLine(gfx, padding, 99, divider - padding - 5, GFX_BLACK);
     GFX_setCursor(gfx, padding, 114);
-    GFX_printf(gfx, "CLAUDE");
+    GFX_printf(gfx, "LIFETIME");
     GFX_setCursor(gfx, divider - 48, 114);
-    GFX_printf(gfx, "%u.%uM", data->dashboard.claude_tokens_tenth_m / 10,
-               data->dashboard.claude_tokens_tenth_m % 10);
+    GFX_printf(gfx, "%u.%uM", data->dashboard.lifetime_tokens_tenth_m / 10,
+               data->dashboard.lifetime_tokens_tenth_m % 10);
     GFX_setCursor(gfx, padding, 128);
-    GFX_printf(gfx, "CODEX");
+    GFX_printf(gfx, "BEST STREAK");
     GFX_setCursor(gfx, divider - 48, 128);
-    GFX_printf(gfx, "%u.%uM", data->dashboard.codex_tokens_tenth_m / 10,
-               data->dashboard.codex_tokens_tenth_m % 10);
+    GFX_printf(gfx, "%u DAYS", data->dashboard.longest_streak_days);
 
     GFX_setCursor(gfx, right_x, 43);
     GFX_printf(gfx, "MONTH TOKENS");
     draw_tokens(gfx, right_x, 69, data->dashboard.month_tokens_tenth_m, false);
     GFX_setCursor(gfx, right_x, 89);
-    GFX_printf(gfx, "COST");
-    draw_cost(gfx, data->width - 61, 89, data->dashboard.month_cost_cents, GFX_RED);
+    GFX_printf(gfx, "5H USED");
+    draw_percent(gfx, data->width - 72, 89, data->dashboard.primary_used_hundredths_percent,
+                 GFX_RED);
     GFX_setCursor(gfx, right_x, 106);
-    GFX_printf(gfx, "REQUESTS");
-    GFX_setCursor(gfx, data->width - 38, 106);
-    GFX_printf(gfx, "%u", data->dashboard.month_requests);
+    GFX_printf(gfx, "WEEK USED");
+    draw_percent(gfx, data->width - 72, 106, data->dashboard.secondary_used_hundredths_percent,
+                 GFX_RED);
     GFX_setCursor(gfx, right_x, 123);
-    GFX_printf(gfx, "AVG / DAY");
+    GFX_printf(gfx, "PEAK / DAY");
     GFX_setCursor(gfx, data->width - 39, 123);
-    GFX_printf(gfx, "%u.%uM", data->dashboard.month_tokens_tenth_m / 300,
-               (data->dashboard.month_tokens_tenth_m / 30) % 10);
+    GFX_printf(gfx, "%u.%uM", data->dashboard.peak_daily_tokens_tenth_m / 10,
+               data->dashboard.peak_daily_tokens_tenth_m % 10);
 
     GFX_drawFastHLine(gfx, padding, data->height - 116, data->width - 2 * padding, GFX_BLACK);
     GFX_setCursor(gfx, padding, data->height - 102);

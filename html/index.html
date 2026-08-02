@@ -11,43 +11,48 @@
     <header>
       <p class="eyebrow">NRF52811 · 4.2 INCH E-PAPER</p>
       <h1>Codex 用量看板</h1>
-      <p>通过蓝牙把你的 Codex 用量显示到墨水屏。</p>
+      <p>读取本机当前登录的 Codex 使用数据，并通过蓝牙推送到墨水屏。</p>
     </header>
 
-    <section class="card connection-card">
+    <section class="card actions">
       <div>
-        <h2>设备连接</h2>
-        <p id="connectionStatus" class="status">未连接</p>
+        <h2>1. 获取本机 Codex 用量</h2>
+        <p id="usageStatus" class="status">等待刷新</p>
       </div>
-      <button id="connectButton" type="button">连接 NRF_EPD</button>
+      <button id="refreshButton" type="button">刷新 Codex 数据</button>
     </section>
 
-    <section class="card">
-      <div class="section-heading">
-        <div>
-          <h2>用量数据</h2>
-          <p>Token 单位为 M；费用单位为 USD。发送时会同步屏幕时间。</p>
-        </div>
-        <button id="sendButton" type="button" disabled>发送到墨水屏</button>
-      </div>
+    <section class="card metrics" aria-live="polite">
+      <div class="metric primary"><span>今日 Token</span><strong id="todayTokens">--</strong></div>
+      <div class="metric primary"><span>本月 Token</span><strong id="monthTokens">--</strong></div>
+      <div class="metric"><span>累计 Token</span><strong id="lifetimeTokens">--</strong></div>
+      <div class="metric"><span>峰值日</span><strong id="peakTokens">--</strong></div>
+      <div class="metric"><span>连续使用</span><strong id="currentStreak">--</strong></div>
+      <div class="metric"><span>最长连续</span><strong id="longestStreak">--</strong></div>
+      <div class="metric"><span>5 小时额度</span><strong id="primaryLimit">--</strong></div>
+      <div class="metric"><span>周额度</span><strong id="secondaryLimit">--</strong></div>
+    </section>
 
-      <form id="dashboardForm">
-        <div class="grid">
-          <label>今日 Token (M)<input id="todayTokens" type="number" min="0" max="6553.5" step="0.1" value="133.9" required></label>
-          <label>本月 Token (M)<input id="monthTokens" type="number" min="0" max="6553.5" step="0.1" value="460.4" required></label>
-          <label>今日请求数<input id="todayRequests" type="number" min="0" max="65535" step="1" value="1053" required></label>
-          <label>本月请求数<input id="monthRequests" type="number" min="0" max="65535" step="1" value="4306" required></label>
-          <label>今日费用 (USD)<input id="todayCost" type="number" min="0" max="655.35" step="0.01" value="86.75" required></label>
-          <label>本月费用 (USD)<input id="monthCost" type="number" min="0" max="655.35" step="0.01" value="339.66" required></label>
-          <label>Claude Token (M)<input id="claudeTokens" type="number" min="0" max="6553.5" step="0.1" value="0" required></label>
-          <label>Codex Token (M)<input id="codexTokens" type="number" min="0" max="6553.5" step="0.1" value="133.9" required></label>
-        </div>
-        <label class="trend">近 7 日 Token (M，以逗号分隔)<input id="trend" type="text" value="7.6, 9.3, 5.8, 5.2, 6.8, 6.1, 8.8" required></label>
-      </form>
+    <section class="card trend-card">
+      <h2>近 7 天 Token</h2>
+      <p id="trend">--</p>
+      <p id="account" class="muted">--</p>
+    </section>
+
+    <section class="card actions">
+      <div>
+        <h2>2. 推送到墨水屏</h2>
+        <p id="connectionStatus" class="status">未连接</p>
+      </div>
+      <div class="button-group">
+        <button id="connectButton" type="button">连接 NRF_EPD</button>
+        <button id="sendButton" type="button" disabled>推送看板</button>
+      </div>
     </section>
 
     <section class="note">
-      <strong>提示：</strong> 请使用 Chrome 或 Edge，通过 <code>http://localhost</code> 或 HTTPS 打开本页；浏览器蓝牙不支持直接打开本地文件。
+      <strong>启动方式：</strong> 在项目根目录执行 <code>python local_server.py</code>，再用 Chrome 或 Edge 打开
+      <code>http://127.0.0.1:8765/html/</code>。服务只监听本机，浏览器不会接触登录令牌。
     </section>
   </main>
   <script src="js/main.js"></script>
