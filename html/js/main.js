@@ -2,11 +2,8 @@ const EPD_SERVICE = '62750001-d828-918d-fb46-b6c11c675aec';
 const EPD_CHARACTERISTIC = '62750002-d828-918d-fb46-b6c11c675aec';
 const EPD_CMD_INIT = 0x01;
 const EPD_CMD_REFRESH = 0x05;
-const EPD_CMD_SET_TIME = 0x20;
-const EPD_CMD_SET_DASHBOARD = 0x22;
 const EPD_CMD_WRITE_IMAGE = 0x30;
 const EPD_APP_VERSION = '62750003-d828-918d-fb46-b6c11c675aec';
-const DASHBOARD_FIRMWARE_VERSION = 0x20;
 
 let device;
 let characteristic;
@@ -18,25 +15,15 @@ const refreshButton = document.getElementById('refreshButton');
 const sendButton = document.getElementById('sendButton');
 const connectionStatus = document.getElementById('connectionStatus');
 const usageStatus = document.getElementById('usageStatus');
-const protocolMode = document.getElementById('protocolMode');
 
 function setConnectionStatus(message) {
   connectionStatus.textContent = message;
 }
 
-function usesDashboardProtocol() {
-  return protocolMode.value === 'dashboard' && appVersion === DASHBOARD_FIRMWARE_VERSION;
-}
-
-function connectionModeLabel() {
-  if (usesDashboardProtocol()) return '看板协议';
-  return '商家原厂图片协议（强制兼容）';
-}
-
 function showConnectedStatus() {
   if (!device?.gatt?.connected) return;
   const version = appVersion === null ? '未知' : `0x${appVersion.toString(16).padStart(2, '0')}`;
-  setConnectionStatus(`已连接：${device.name} · 固件 ${version} · ${connectionModeLabel()}`);
+  setConnectionStatus(`已连接：${device.name} · 固件 ${version} · 商家图片上传模式`);
 }
 
 function formatTokens(tokens) {
@@ -132,7 +119,9 @@ async function connect() {
     const server = await device.gatt.connect();
     const service = await server.getPrimaryService(EPD_SERVICE);
     characteristic = await service.getCharacteristic(EPD_CHARACTERISTIC);
-    await write(EPD_CMD_INIT, [0x02]);
+    // Keep this identical to the merchant web uploader: the board already
+    // stores its panel configuration, so INIT is sent without extra payload.
+    await write(EPD_CMD_INIT);
     appVersion = await readFirmwareVersion(service);
     sendButton.disabled = !dashboard;
     connectButton.textContent = '断开连接';
@@ -143,26 +132,6 @@ async function connect() {
     sendButton.disabled = true;
     setConnectionStatus(`连接失败：${error.message}`);
   }
-}
-
-function putUint16LE(bytes, offset, value) {
-  const safeValue = Math.max(0, Math.min(65535, Math.round(value)));
-  bytes[offset] = safeValue & 0xff;
-  bytes[offset + 1] = safeValue >>> 8;
-}
-
-function tokensToTenthM(tokens) {
-  return tokens / 100_000;
-}
-
-function percentToHundredths(percent) {
-  return percent === null || percent === undefined ? 0 : percent * 100;
-}
-
-function timePayload() {
-  const now = Math.floor(Date.now() / 1000);
-  const offsetHours = -new Date().getTimezoneOffset() / 60;
-  return [(now >>> 24) & 0xff, (now >>> 16) & 0xff, (now >>> 8) & 0xff, now & 0xff, offsetHours & 0xff, 0x03];
 }
 
 function drawLine(context, x1, y1, x2, y2) {
@@ -266,27 +235,6 @@ async function sendRasterDashboard() {
   await write(EPD_CMD_REFRESH);
 }
 
-async function sendDashboardProtocol() {
-  const { usage, rateLimits } = dashboard;
-  const summary = new Uint8Array(17);
-  summary[0] = 0;
-  putUint16LE(summary, 1, tokensToTenthM(usage.todayTokens));
-  putUint16LE(summary, 3, tokensToTenthM(usage.monthTokens));
-  putUint16LE(summary, 5, usage.currentStreakDays);
-  putUint16LE(summary, 7, usage.longestStreakDays);
-  putUint16LE(summary, 9, percentToHundredths(rateLimits.primaryUsedPercent));
-  putUint16LE(summary, 11, percentToHundredths(rateLimits.secondaryUsedPercent));
-  putUint16LE(summary, 13, tokensToTenthM(usage.lifetimeTokens));
-  putUint16LE(summary, 15, tokensToTenthM(usage.peakDailyTokens));
-
-  const history = new Uint8Array(15);
-  history[0] = 1;
-  usage.history.forEach((tokens, index) => putUint16LE(history, 1 + index * 2, tokensToTenthM(tokens)));
-  await write(EPD_CMD_SET_TIME, timePayload());
-  await write(EPD_CMD_SET_DASHBOARD, summary);
-  await write(EPD_CMD_SET_DASHBOARD, history);
-}
-
 async function sendDashboard() {
   if (!dashboard) {
     setConnectionStatus('请先刷新 Codex 数据。');
@@ -294,12 +242,7 @@ async function sendDashboard() {
   }
   try {
     sendButton.disabled = true;
-    if (usesDashboardProtocol()) {
-      setConnectionStatus('正在通过看板协议刷新墨水屏…');
-      await sendDashboardProtocol();
-    } else {
-      await sendRasterDashboard();
-    }
+    await sendRasterDashboard();
     setConnectionStatus(`已推送：${new Date().toLocaleTimeString()}`);
   } catch (error) {
     setConnectionStatus(`推送失败：${error.message}`);
@@ -311,5 +254,4 @@ async function sendDashboard() {
 connectButton.addEventListener('click', connect);
 refreshButton.addEventListener('click', refreshUsage);
 sendButton.addEventListener('click', sendDashboard);
-protocolMode.addEventListener('change', showConnectedStatus);
 refreshUsage();
