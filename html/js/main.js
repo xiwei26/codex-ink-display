@@ -18,9 +18,25 @@ const refreshButton = document.getElementById('refreshButton');
 const sendButton = document.getElementById('sendButton');
 const connectionStatus = document.getElementById('connectionStatus');
 const usageStatus = document.getElementById('usageStatus');
+const protocolMode = document.getElementById('protocolMode');
 
 function setConnectionStatus(message) {
   connectionStatus.textContent = message;
+}
+
+function usesDashboardProtocol() {
+  return protocolMode.value === 'dashboard' && appVersion === DASHBOARD_FIRMWARE_VERSION;
+}
+
+function connectionModeLabel() {
+  if (usesDashboardProtocol()) return '看板协议';
+  return '商家原厂图片协议（强制兼容）';
+}
+
+function showConnectedStatus() {
+  if (!device?.gatt?.connected) return;
+  const version = appVersion === null ? '未知' : `0x${appVersion.toString(16).padStart(2, '0')}`;
+  setConnectionStatus(`已连接：${device.name} · 固件 ${version} · ${connectionModeLabel()}`);
 }
 
 function formatTokens(tokens) {
@@ -120,9 +136,7 @@ async function connect() {
     appVersion = await readFirmwareVersion(service);
     sendButton.disabled = !dashboard;
     connectButton.textContent = '断开连接';
-    const mode = appVersion === DASHBOARD_FIRMWARE_VERSION ? '看板协议' : '原厂图片协议';
-    const version = appVersion === null ? '未知' : `0x${appVersion.toString(16).padStart(2, '0')}`;
-    setConnectionStatus(`已连接：${device.name} · 固件 ${version} · ${mode}`);
+    showConnectedStatus();
   } catch (error) {
     characteristic = null;
     appVersion = null;
@@ -280,7 +294,7 @@ async function sendDashboard() {
   }
   try {
     sendButton.disabled = true;
-    if (appVersion === DASHBOARD_FIRMWARE_VERSION) {
+    if (usesDashboardProtocol()) {
       setConnectionStatus('正在通过看板协议刷新墨水屏…');
       await sendDashboardProtocol();
     } else {
@@ -297,4 +311,5 @@ async function sendDashboard() {
 connectButton.addEventListener('click', connect);
 refreshButton.addEventListener('click', refreshUsage);
 sendButton.addEventListener('click', sendDashboard);
+protocolMode.addEventListener('change', showConnectedStatus);
 refreshUsage();
