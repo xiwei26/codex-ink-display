@@ -25,6 +25,55 @@ make -f Makefile.nRF52
 
 首次烧录仍需要按硬件调试器流程写入对应的 S112 SoftDevice；仓库不再包含 OTA 或烧录工具。
 
+### 1.1 安装看板固件（推荐：Keil + J-Link）
+
+本项目的固件目标是 **nRF52811_xxAA**，需要 **S112 7.3.0 SoftDevice**。烧录必须使用 SWD 调试接口，不能通过网页蓝牙完成。
+
+#### 准备工具和连线
+
+1. 安装 Keil MDK 5，并在 Pack Installer 安装 `NordicSemiconductor::nRF_DeviceFamilyPack`（工程记录的版本为 8.40.3）。若 Keil 提示编译器不可用，安装并选择 Legacy Arm Compiler 5。
+2. 安装 SEGGER J-Link 软件；若希望使用命令行烧录，再安装 Nordic nRF Command Line Tools（提供 `nrfjprog`）。
+3. 将 J-Link 与墨水屏板的 SWD 焊盘连接：`SWDIO`、`SWCLK`、`GND`，并让目标板处于 3.0–3.3V 供电状态；`RESET` 可选。不要把 5V 接到 nRF52811。
+
+> 如需保留商家原版固件，先用 J-Link/nRF Connect Programmer 导出备份。`Erase all` 会清除原固件、配置和可能存在的引导程序，通常无需执行。
+
+#### 编译应用程序
+
+1. 打开 [Keil/EPD-nRF52.uvprojx](Keil/EPD-nRF52.uvprojx)。
+2. 在工具栏 Target 下拉框选择 **`nRF52811_xxAA`**，不要选择 `flash_softdevice`。
+3. 选择 **Project → Rebuild all target files**（或按 `F7`）。
+4. 成功后得到 `Keil/_build_nRF52/EPD-nRF52.hex`。
+
+#### 写入 SoftDevice 与应用
+
+**图形界面方式**：在 nRF Connect Programmer 中连接 J-Link，依次添加并写入下面两个 HEX 文件：
+
+1. `SDK/17.1.0_ddde560/components/softdevice/s112/hex/s112_nrf52_7.3.0_softdevice.hex`
+2. `Keil/_build_nRF52/EPD-nRF52.hex`
+
+**命令行方式**：确认 `nrfjprog --version` 可运行后，在项目根目录执行：
+
+```powershell
+# 首次写入或不确定 SoftDevice 版本时执行
+nrfjprog -f nrf52 --program SDK/17.1.0_ddde560/components/softdevice/s112/hex/s112_nrf52_7.3.0_softdevice.hex --sectorerase
+
+# 每次更新看板固件时执行
+nrfjprog -f nrf52 --program Keil/_build_nRF52/EPD-nRF52.hex --sectorerase
+nrfjprog -f nrf52 --reset
+```
+
+也可在已配置好 `GNU_INSTALL_ROOT` 与 `nrfjprog` 的环境中运行：
+
+```powershell
+make -f Makefile.nRF52
+make -f Makefile.nRF52 flash_softdevice
+make -f Makefile.nRF52 flash
+```
+
+#### 验证结果
+
+重启设备后，打开本地网页并重新连接。连接状态应显示 **`固件 0x20 · 看板协议`**；随后点击“推送看板”，墨水屏会收到两个紧凑数据包并刷新。若显示 `0x19`，说明设备仍是商家原厂固件，网页会自动改走图片传输兼容模式。
+
 ### 2. 启动本机看板服务
 
 前提：已安装并登录 Codex，且 `codex --version` 可运行；Windows 上还需要 Python 3。
