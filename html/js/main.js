@@ -49,8 +49,8 @@ function showDashboard(data) {
   setText('peakTokens', formatTokens(usage.peakDailyTokens));
   setText('currentStreak', `${usage.currentStreakDays} 天`);
   setText('longestStreak', `${usage.longestStreakDays} 天`);
-  setText('primaryLimit', formatPercent(rateLimits.primaryUsedPercent));
-  setText('secondaryLimit', formatPercent(rateLimits.secondaryUsedPercent));
+  setText('primaryLimit', formatPercent(rateLimits.fiveHourUsedPercent));
+  setText('secondaryLimit', formatPercent(rateLimits.weeklyUsedPercent));
   setText('trend', usage.history.map(formatTokens).join(' · '));
   setText('account', `账号类型：${account.type || '未知'}${account.planType ? ` · 计划：${account.planType}` : ''}`);
 }
@@ -172,8 +172,8 @@ function dashboardRaster() {
 
   drawText(context, 'MONTH TOKEN', 220, 50, '12px sans-serif');
   drawText(context, formatTokens(usage.monthTokens), 220, 82, 'bold 24px serif');
-  drawText(context, `5H USED  ${formatPercent(rateLimits.primaryUsedPercent)}`, 220, 104, '12px sans-serif');
-  drawText(context, `WEEK USED  ${formatPercent(rateLimits.secondaryUsedPercent)}`, 220, 122, '12px sans-serif');
+  drawText(context, `5H USED  ${formatPercent(rateLimits.fiveHourUsedPercent)}`, 220, 104, '12px sans-serif');
+  drawText(context, `WEEK USED  ${formatPercent(rateLimits.weeklyUsedPercent)}`, 220, 122, '12px sans-serif');
   drawText(context, `PEAK ${formatTokens(usage.peakDailyTokens)}`, 220, 140, '12px sans-serif');
 
   drawLine(context, 12, 157, 388, 157);

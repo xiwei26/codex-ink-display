@@ -23,6 +23,8 @@ from typing import Any
 
 ROOT_DIR = Path(__file__).resolve().parent
 REQUEST_TIMEOUT_SECONDS = 15
+FIVE_HOUR_WINDOW_MINUTES = 5 * 60
+WEEKLY_WINDOW_MINUTES = 7 * 24 * 60
 
 
 class CodexAppServerError(RuntimeError):
@@ -143,6 +145,21 @@ def usage_percent(window: Any) -> float | None:
         return None
 
 
+def rate_limit_window(rate_limits: dict[str, Any], duration_minutes: int) -> dict[str, Any] | None:
+    """Find a quota window by duration instead of relying on API field order."""
+    for name in ("primary", "secondary"):
+        window = rate_limits.get(name)
+        if not isinstance(window, dict):
+            continue
+        try:
+            window_duration = int(window.get("windowDurationMins"))
+        except (TypeError, ValueError):
+            continue
+        if window_duration == duration_minutes:
+            return window
+    return None
+
+
 def make_dashboard_payload(
     account_response: dict[str, Any], usage_response: dict[str, Any], rate_limits_response: dict[str, Any]
 ) -> dict[str, Any]:
@@ -161,6 +178,8 @@ def make_dashboard_payload(
     month_tokens = sum(tokens for day, tokens in tokens_by_day.items() if day.startswith(month_prefix))
     rate_limits = rate_limits_response.get("rateLimits")
     rate_limits = rate_limits if isinstance(rate_limits, dict) else {}
+    five_hour_window = rate_limit_window(rate_limits, FIVE_HOUR_WINDOW_MINUTES)
+    weekly_window = rate_limit_window(rate_limits, WEEKLY_WINDOW_MINUTES)
     account = account_response.get("account")
     account = account if isinstance(account, dict) else {}
 
@@ -179,14 +198,10 @@ def make_dashboard_payload(
             "history": history,
         },
         "rateLimits": {
-            "primaryUsedPercent": usage_percent(rate_limits.get("primary")),
-            "secondaryUsedPercent": usage_percent(rate_limits.get("secondary")),
-            "primaryResetsAt": rate_limits.get("primary", {}).get("resetsAt")
-            if isinstance(rate_limits.get("primary"), dict)
-            else None,
-            "secondaryResetsAt": rate_limits.get("secondary", {}).get("resetsAt")
-            if isinstance(rate_limits.get("secondary"), dict)
-            else None,
+            "fiveHourUsedPercent": usage_percent(five_hour_window),
+            "weeklyUsedPercent": usage_percent(weekly_window),
+            "fiveHourResetsAt": five_hour_window.get("resetsAt") if five_hour_window else None,
+            "weeklyResetsAt": weekly_window.get("resetsAt") if weekly_window else None,
         },
     }
 

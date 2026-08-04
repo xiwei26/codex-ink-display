@@ -9,7 +9,7 @@
 - 当前和最长连续使用天数
 - 5 小时与周额度已用比例
 
-数据来自本机 `codex app-server` 的 `account/usage/read` 与 `account/rateLimits/read`。服务只返回用于显示的数值，不读取或传输 `auth.json`、访问令牌、邮箱或密码。
+数据来自本机 `codex app-server` 的 `account/usage/read` 与 `account/rateLimits/read`。额度窗口按照接口返回的时长识别（300 分钟为 5 小时、10080 分钟为 7 天），不依赖 `primary`/`secondary` 字段顺序。服务只返回用于显示的数值，不读取或传输 `auth.json`、访问令牌、邮箱或密码。
 
 ## 快速使用
 
@@ -141,7 +141,7 @@ main.c           nRF52811 固件入口
 
 - 仅支持当前已用 ChatGPT 登录的 Codex 账号；API Key 模式通常没有 ChatGPT 额度数据。
 - Codex 接口不提供每个请求的美元费用或 Claude 用量，因此看板不显示这些字段。
-- `account/usage/read` 和 `account/rateLimits/read` 的可用字段取决于当前 Codex 版本及账号计划；缺失字段会显示为 0 或“不可用”。
+- `account/usage/read` 和 `account/rateLimits/read` 的可用字段取决于当前 Codex 版本及账号计划；缺失的额度时长窗口会显示为“不可用”，不会拿另一个时长的额度代替。
 
 ## 来源与许可
 
