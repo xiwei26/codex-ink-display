@@ -9,6 +9,7 @@ let device;
 let characteristic;
 let dashboard;
 let appVersion = null;
+let panelModelId = null;
 
 const connectButton = document.getElementById('connectButton');
 const refreshButton = document.getElementById('refreshButton');
@@ -23,7 +24,8 @@ function setConnectionStatus(message) {
 function showConnectedStatus() {
   if (!device?.gatt?.connected) return;
   const version = appVersion === null ? '未知' : `0x${appVersion.toString(16).padStart(2, '0')}`;
-  setConnectionStatus(`已连接：${device.name} · 固件 ${version} · 商家图片上传模式`);
+  const panel = panelModelId === null ? '默认三色面板' : `面板 0x${panelModelId.toString(16).padStart(2, '0')}`;
+  setConnectionStatus(`已连接：${device.name} · 固件 ${version} · ${panel} · 商家图片上传模式`);
 }
 
 function formatTokens(tokens) {
@@ -94,6 +96,32 @@ async function readFirmwareVersion(service) {
   }
 }
 
+async function readPanelModelId() {
+  return new Promise((resolve) => {
+    let finished = false;
+    let timeoutId;
+    const finish = (modelId) => {
+      if (finished) return;
+      finished = true;
+      clearTimeout(timeoutId);
+      characteristic.removeEventListener('characteristicvaluechanged', onConfiguration);
+      resolve(modelId);
+    };
+    const onConfiguration = (event) => {
+      const value = event.target.value;
+      const bytes = new Uint8Array(value.buffer, value.byteOffset, value.byteLength);
+      finish(EpdTransfer.parsePanelModel(bytes));
+    };
+
+    characteristic.addEventListener('characteristicvaluechanged', onConfiguration);
+    characteristic.startNotifications()
+      .then(() => {
+        if (!finished) timeoutId = setTimeout(() => finish(null), 1500);
+      })
+      .catch(() => finish(null));
+  });
+}
+
 async function connect() {
   if (device?.gatt?.connected) {
     device.gatt.disconnect();
@@ -112,6 +140,7 @@ async function connect() {
     device.addEventListener('gattserverdisconnected', () => {
       characteristic = null;
       appVersion = null;
+      panelModelId = null;
       sendButton.disabled = true;
       connectButton.textContent = '连接 NRF_EPD';
       setConnectionStatus('已断开');
@@ -119,6 +148,7 @@ async function connect() {
     const server = await device.gatt.connect();
     const service = await server.getPrimaryService(EPD_SERVICE);
     characteristic = await service.getCharacteristic(EPD_CHARACTERISTIC);
+    panelModelId = await readPanelModelId();
     // Keep this identical to the merchant web uploader: the board already
     // stores its panel configuration, so INIT is sent without extra payload.
     await write(EPD_CMD_INIT);
@@ -129,6 +159,7 @@ async function connect() {
   } catch (error) {
     characteristic = null;
     appVersion = null;
+    panelModelId = null;
     sendButton.disabled = true;
     setConnectionStatus(`连接失败：${error.message}`);
   }
@@ -221,15 +252,28 @@ function canvasToMonochrome(canvas) {
   return output;
 }
 
-async function sendRasterDashboard() {
-  const image = canvasToMonochrome(dashboardRaster());
+async function sendImagePlane(image, plane) {
   const chunkSize = 18;
   for (let offset = 0; offset < image.length; offset += chunkSize) {
     const packetIndex = Math.floor(offset / chunkSize) + 1;
     const packetCount = Math.ceil(image.length / chunkSize);
-    setConnectionStatus(`正在传输看板图片：${packetIndex}/${packetCount}`);
-    const ramFlags = offset === 0 ? 0x0f : 0xff;
+    const planeName = plane === 'black' ? '黑白层' : '空白红色层';
+    setConnectionStatus(`正在传输${planeName}：${packetIndex}/${packetCount}`);
+    const ramFlags = EpdTransfer.ramFlag(plane, offset === 0);
     await write(EPD_CMD_WRITE_IMAGE, [ramFlags, ...image.slice(offset, offset + chunkSize)]);
+  }
+}
+
+async function sendRasterDashboard() {
+  const image = canvasToMonochrome(dashboardRaster());
+  const kind = EpdTransfer.panelKind(panelModelId);
+  if (kind === 'unsupported') {
+    throw new Error(`当前看板不支持面板型号 0x${panelModelId.toString(16).padStart(2, '0')}`);
+  }
+
+  await sendImagePlane(image, 'black');
+  if (kind === 'three-color') {
+    await sendImagePlane(EpdTransfer.blankColorPlane(image.length), 'color');
   }
   setConnectionStatus('正在刷新墨水屏…');
   await write(EPD_CMD_REFRESH);
